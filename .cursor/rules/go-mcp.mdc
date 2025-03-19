@@ -1,0 +1,136 @@
+---
+description: Go MCP (Model Context Protocol) Development Rules
+globs: *.go
+---
+## Description
+This rule provides guidelines for working with the Model Context Protocol (MCP) in Go applications using the `go-mcp` library. MCP is a protocol for AI assistants to interact with external tools and services.
+
+## Rule
+When working with MCP in Go:
+
+### MCP Server Setup
+1. Use `mcp.NewServer()` with appropriate configuration options to create a new MCP server
+2. Configure transports based on requirements (stdio, HTTP/JSON-RPC, SSE)
+3. Always handle graceful shutdown of the server
+4. Use context for cancellation and timeouts
+5. Register all tools before starting the server
+
+### Tool Implementation
+1. Define tool parameters as Go structs with JSON tags
+2. Add descriptive comments to struct fields for parameter documentation
+3. Use `mcp.CreateTool()` to create new tools with proper definitions
+4. Focus on business logic in tool handlers (validation is automatic)
+5. Return appropriate `mcp.CallToolResult` objects with clear content
+
+### Content Types
+1. Use appropriate content types (`mcp.TextContent`, `mcp.ImageContent`, etc.)
+2. Structure complex responses using multiple content objects
+3. Set the `IsError` flag when returning error results
+4. Use helper functions for common response patterns
+
+### Context Handling
+1. Pass context through to all tool handlers
+2. Respect context cancellation in long-running operations
+3. Use context timeouts for external API calls
+4. Add appropriate values to context when needed
+
+### Error Handling
+1. Return error results rather than panicking
+2. Provide clear, user-friendly error messages
+3. Include relevant details in error messages
+4. Use helper functions for creating error responses
+
+### Testing
+1. Write unit tests for tool handlers
+2. Mock external dependencies in tests
+3. Test both success and error cases
+4. Use table-driven tests for multiple scenarios
+
+## Implementation
+- The Cursor IDE will enforce this rule by:
+  - Providing suggestions for MCP implementation
+  - Highlighting potential issues in MCP code
+  - Offering refactoring options to improve code quality
+
+## Benefits
+- Consistent, reliable MCP implementations
+- Better error handling and user experience
+- Easier maintenance and extension of MCP tools
+- Code that follows best practices for the MCP protocol
+
+## Examples
+
+### ✅ Correct Tool Implementation:
+
+```go
+func createSearchTool() mcp.Tool {
+	type SearchParams struct {
+		// The query string to search for.
+		Query string `json:"query"`
+		// Maximum number of results to return.
+		Limit int `json:"limit,omitempty"`
+	}
+
+	return mcp.CreateTool(mcp.ToolDef[SearchParams]{
+		Name:        "search",
+		Description: "Search for information in the database",
+		HandleFunc: func(ctx context.Context, params SearchParams) *mcp.CallToolResult {
+			limit := 10
+			if params.Limit > 0 {
+				limit = params.Limit
+			}
+
+			results, err := searchDatabase(ctx, params.Query, limit)
+			if err != nil {
+				return &mcp.CallToolResult{
+					Content: []mcp.Content{
+						mcp.TextContent{
+							Text: fmt.Sprintf("Search failed: %v", err),
+						},
+					},
+					IsError: true,
+				}
+			}
+
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.JSONContent{
+						JSON: results,
+					},
+				},
+			}
+		},
+	})
+}
+```
+
+### ❌ Incorrect Tool Implementation:
+
+```go
+func createBadSearchTool() mcp.Tool {
+	// Missing parameter documentation
+	type Params struct {
+		Query string `json:"q"`
+		Limit int    `json:"l"`
+	}
+
+	return mcp.CreateTool(mcp.ToolDef[Params]{
+		Name: "search",
+		// Missing or inadequate description
+		HandleFunc: func(ctx context.Context, params Params) *mcp.CallToolResult {
+			// No business logic validation
+			// No error handling
+			results := searchDatabase(params.Query, params.Limit)
+			
+			// Incorrect content structure
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					mcp.TextContent{
+						Text: fmt.Sprintf("%v", results),
+					},
+				},
+			}
+		},
+	})
+}
+``` 
